@@ -37,8 +37,8 @@ projet12/
 - Salage automatique, aucun stockage en clair
 
 **Authentification**
-- JWT (JSON Web Token) avec expiration configurable (`JWT_EXPIRATION_HOURS`)
-- Token stocké localement dans le fichier configuré par `AUTH_TOKEN_FILE`
+- JWT (JSON Web Token) avec expiration à 8 heures
+- Token stocké localement dans `.auth_token`
 
 **Permissions**
 - Principe du moindre privilège

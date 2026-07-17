@@ -183,8 +183,8 @@ del epicevents.db        # Windows
 rm epicevents.db         # Linux/Mac
 
 # 2. Supprimer le token de session
-del %USERPROFILE%\.epicevents_auth_token    # Windows
-rm ~/.epicevents_auth_token                 # Linux/Mac
+del .auth_token          # Windows
+rm .auth_token           # Linux/Mac
 
 # 3. Réinitialiser
 python init_database.py
@@ -204,7 +204,7 @@ L'environnement virtuel n'est pas activé. Relancer `venv\Scripts\activate`.
 Vérifier que le dossier courant est bien `projet12/` et que `DATABASE_URL` pointe vers un chemin accessible.
 
 ### Token expiré
-Si un token expiré est détecté, reconnectez-vous :
+Les tokens JWT expirent après 8 heures :
 ```bash
 python epicevents.py logout
 python epicevents.py login

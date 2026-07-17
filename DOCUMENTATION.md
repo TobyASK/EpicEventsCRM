@@ -223,9 +223,9 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
 1. login(email, password)
 2. Vérification Argon2 du mot de passe
 3. Génération du token JWT :
-   payload = { employee_id, email, department, iat [, exp] }
+   payload = { employee_id, email, department, iat, exp }
    token = jwt.encode(payload, JWT_SECRET_KEY, HS256)
-4. Sauvegarde dans AUTH_TOKEN_FILE
+4. Sauvegarde dans .auth_token
 5. Commandes suivantes : lecture + décodage du token
 ```
 
@@ -241,7 +241,7 @@ def _set_sqlite_pragma(dbapi_connection, connection_record):
 }
 ```
 
-- Durée de vie : configurable via JWT_EXPIRATION_HOURS (<= 0 = sans expiration)
+- Durée de vie : 8 heures (une journée de travail)
 - Algorithme : HS256
 - Token expiré → suppression automatique, redirection vers login
 
@@ -438,7 +438,7 @@ Algorithme recommandé par l'OWASP, gagnant du Password Hashing Competition 2015
 
 ### JWT pour l'authentification
 
-Authentification stateless adaptée à une CLI : le token est stocké localement (AUTH_TOKEN_FILE) et relu à chaque commande. Pas de session serveur à maintenir. Expiration configurable.
+Authentification stateless adaptée à une CLI : le token est stocké localement et relu à chaque commande. Pas de session serveur à maintenir. Expiration automatique après 8 heures.
 
 ### Click + Rich pour la CLI
 

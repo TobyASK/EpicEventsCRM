@@ -23,7 +23,7 @@ python epicevents.py login
 ```bash
 python epicevents.py login
 ```
-Génère un token JWT (durée configurable) stocké dans `AUTH_TOKEN_FILE`.
+Génère un token JWT valide 8 heures, stocké dans `.auth_token`.
 
 ### Se déconnecter
 ```bash
