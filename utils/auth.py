@@ -70,10 +70,12 @@ def create_jwt_token(
         'employee_id': employee_id,
         'email': employee_email,
         'department': department,
-        'iat': datetime.now(UTC)
+        'iat': int(datetime.now(UTC).timestamp())
     }
     if JWT_EXPIRATION_HOURS > 0:
-        payload['exp'] = datetime.now(UTC) + timedelta(hours=JWT_EXPIRATION_HOURS)
+        payload['exp'] = int(
+            (datetime.now(UTC) + timedelta(hours=JWT_EXPIRATION_HOURS)).timestamp()
+        )
 
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return token
