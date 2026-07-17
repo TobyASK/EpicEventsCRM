@@ -3,6 +3,7 @@ Gestion de l'authentification avec JWT et hachage des mots de passe
 """
 import jwt
 import argon2
+from os import remove
 from datetime import datetime, timedelta, UTC
 from typing import Optional
 from config.settings import (
@@ -136,7 +137,6 @@ def delete_token_file(filepath: str = TOKEN_PATH):
         filepath: Le chemin du fichier
     """
     try:
-        from os import remove
         remove(filepath)
     except FileNotFoundError:
         pass

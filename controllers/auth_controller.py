@@ -100,8 +100,7 @@ class AuthController:
                 delete_token_file()
                 return None
 
-            employee = self.db.query(Employee).filter(
-                Employee.id == employee_id).first()
+            employee = self.db.get(Employee, employee_id)
             if not employee:
                 delete_token_file()
                 return None
