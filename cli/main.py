@@ -425,11 +425,16 @@ def contract_create():
         client_table.add_column("Entreprise", style="magenta")
         client_table.add_column("Commercial", style="yellow")
         for cli_item in available_clients:
+            commercial_name = (
+                cli_item.commercial_contact.full_name
+                if cli_item.commercial_contact
+                else "N/A"
+            )
             client_table.add_row(
                 str(cli_item.id),
                 cli_item.full_name,
                 cli_item.company_name,
-                cli_item.commercial_contact.full_name
+                commercial_name
             )
         console.print(client_table)
 
