@@ -45,17 +45,6 @@ class Employee(Base):
             f"({self.department.value})>"
         )
 
-    def get(self, key, default=None):
-        """Compatibilité dict-like pour l'utilisateur courant."""
-        mapping = {
-            "employee_id": self.id,
-            "id": self.id,
-            "email": self.email,
-            "full_name": self.full_name,
-            "department": self.department.value,
-        }
-        return mapping.get(key, default)
-
     @property
     def is_commercial(self):
         """True si l'employé appartient au département commercial."""

@@ -122,8 +122,13 @@ class AuthController:
         Raises:
             PermissionError: Si l'utilisateur n'est pas authentifié
         """
-        current_user = self.get_current_user()
-        if not current_user:
+        employee = self.get_current_user()
+        if not employee:
             raise PermissionError(
                 "Vous devez être authentifié pour effectuer cette action")
-        return current_user
+        return {
+            "employee_id": employee.id,
+            "email": employee.email,
+            "department": employee.department.value,
+            "full_name": employee.full_name,
+        }

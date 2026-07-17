@@ -60,7 +60,8 @@ def test_get_current_user_deletes_token_for_unknown_employee(
 def test_token_file_save_load_delete_cycle(tmp_path):
     """Le cycle save/load/delete fonctionne sur un fichier explicite."""
     token_file = tmp_path / "token.txt"
-    save_token_to_file("abc123", filepath=str(token_file))
-    assert load_token_from_file(filepath=str(token_file)) == "abc123"
+    token = create_jwt_token(1, "token@test.com", "gestion")
+    save_token_to_file(token, filepath=str(token_file))
+    assert load_token_from_file(filepath=str(token_file)) == token
     delete_token_file(filepath=str(token_file))
     assert load_token_from_file(filepath=str(token_file)) is None
