@@ -3,6 +3,7 @@ Controller pour l'authentification
 """
 from sqlalchemy.orm import Session
 from controllers.employee_controller import EmployeeController
+from models.employee import Employee
 from utils.auth import (
     verify_password, create_jwt_token, save_token_to_file,
     load_token_from_file, decode_jwt_token, delete_token_file,
@@ -74,7 +75,7 @@ class AuthController:
             log_exception(e, {"action": "logout"})
             raise
 
-    def get_current_user(self) -> Optional[dict]:
+    def get_current_user(self) -> Optional[Employee]:
         """
         Récupère l'utilisateur actuellement authentifié
 
@@ -94,7 +95,18 @@ class AuthController:
                 delete_token_file()
                 return None
 
-            return payload
+            employee_id = payload.get('employee_id')
+            if employee_id is None:
+                delete_token_file()
+                return None
+
+            employee = self.db.query(Employee).filter(
+                Employee.id == employee_id).first()
+            if not employee:
+                delete_token_file()
+                return None
+
+            return employee
 
         except Exception as e:
             log_exception(e, {"action": "get_current_user"})

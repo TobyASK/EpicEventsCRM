@@ -1,25 +1,19 @@
 """
 Gestion de l'authentification avec JWT et hachage des mots de passe
 """
-import os
 import jwt
 import argon2
-from datetime import datetime, timedelta
-from pathlib import Path
+from datetime import datetime, timedelta, UTC
 from typing import Optional
 from config.settings import (
-    JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRATION_HOURS,
+    JWT_SECRET_KEY, JWT_ALGORITHM, JWT_EXPIRATION_HOURS, AUTH_TOKEN_FILE,
 )
 
 
 # Hasher pour les mots de passe avec Argon2
 ph = argon2.PasswordHasher()
 
-# Emplacement du jeton de session : dans le dossier personnel de
-# l'utilisateur (chemin absolu stable, retrouvé quel que soit le dossier
-# courant et conservé après un redémarrage du PC). Surchargeable via .env.
-TOKEN_PATH = os.getenv(
-    'AUTH_TOKEN_FILE', str(Path.home() / '.epicevents_auth_token'))
+TOKEN_PATH = AUTH_TOKEN_FILE
 
 
 def hash_password(password: str) -> str:
@@ -71,15 +65,14 @@ def create_jwt_token(
     Returns:
         Le token JWT encodé
     """
-    expiration = datetime.utcnow() + timedelta(hours=JWT_EXPIRATION_HOURS)
-
     payload = {
         'employee_id': employee_id,
         'email': employee_email,
         'department': department,
-        'exp': expiration,
-        'iat': datetime.utcnow()
+        'iat': datetime.now(UTC)
     }
+    if JWT_EXPIRATION_HOURS > 0:
+        payload['exp'] = datetime.now(UTC) + timedelta(hours=JWT_EXPIRATION_HOURS)
 
     token = jwt.encode(payload, JWT_SECRET_KEY, algorithm=JWT_ALGORITHM)
     return token
@@ -117,7 +110,7 @@ def save_token_to_file(token: str, filepath: str = TOKEN_PATH):
         f.write(token)
 
 
-def load_token_from_file(filepath: str = '.auth_token') -> Optional[str]:
+def load_token_from_file(filepath: str = TOKEN_PATH) -> Optional[str]:
     """
     Charge le token depuis un fichier
 
@@ -135,7 +128,7 @@ def load_token_from_file(filepath: str = '.auth_token') -> Optional[str]:
         return None
 
 
-def delete_token_file(filepath: str = '.auth_token'):
+def delete_token_file(filepath: str = TOKEN_PATH):
     """
     Supprime le fichier de token
 
@@ -143,7 +136,7 @@ def delete_token_file(filepath: str = '.auth_token'):
         filepath: Le chemin du fichier
     """
     try:
-        import os
-        os.remove(filepath)
+        from os import remove
+        remove(filepath)
     except FileNotFoundError:
         pass

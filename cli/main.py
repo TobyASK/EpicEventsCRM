@@ -49,7 +49,7 @@ def login(email, password):
     try:
         auth_controller = AuthController(db)
         # Vérifie les identifiants et génère un token JWT stocké
-        # dans .auth_token
+        # localement (chemin configurable via AUTH_TOKEN_FILE)
         result = auth_controller.login(email, password)
 
         console.print("[bold green][OK]Connexion réussie![/bold green]")
@@ -406,7 +406,37 @@ def contract_create():
         current_user = auth_controller.require_auth()
 
         contract_number = Prompt.ask("Numéro de contrat")
-        client_id = int(Prompt.ask("ID du client"))
+        client_controller = ClientController(db)
+        if current_user.get('department') == "commercial":
+            available_clients = client_controller.get_my_clients(current_user)
+        else:
+            available_clients = client_controller.get_all_clients(current_user)
+
+        if not available_clients:
+            console.print(
+                "[bold red][X]Aucun client disponible pour créer un contrat."
+                "[/bold red]"
+            )
+            return
+
+        client_table = Table(title="Clients disponibles")
+        client_table.add_column("ID", style="cyan")
+        client_table.add_column("Nom", style="green")
+        client_table.add_column("Entreprise", style="magenta")
+        client_table.add_column("Commercial", style="yellow")
+        for cli_item in available_clients:
+            client_table.add_row(
+                str(cli_item.id),
+                cli_item.full_name,
+                cli_item.company_name,
+                cli_item.commercial_contact.full_name
+            )
+        console.print(client_table)
+
+        client_id = int(Prompt.ask(
+            "Sélectionnez l'ID du client",
+            choices=[str(cli_item.id) for cli_item in available_clients]
+        ))
         total_amount = float(Prompt.ask("Montant total"))
         # Montant restant optionnel : vide = montant total
         amount_remaining = Prompt.ask(
