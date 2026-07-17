@@ -2,6 +2,7 @@
 Paramètres généraux de l'application
 """
 import os
+import warnings
 from dotenv import load_dotenv
 from pathlib import Path
 
@@ -16,6 +17,11 @@ def _int_env(name: str, default: int) -> int:
     try:
         return int(value)
     except ValueError:
+        warnings.warn(
+            f"{name} invalide ({value!r}), fallback sur {default}",
+            RuntimeWarning,
+            stacklevel=2,
+        )
         return default
 
 

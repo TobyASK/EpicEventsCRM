@@ -6,6 +6,7 @@ from rich.console import Console
 from rich.table import Table
 from rich.prompt import Prompt
 from config.database import SessionLocal, init_db
+from models.employee import Department
 from controllers.auth_controller import AuthController
 from controllers.employee_controller import EmployeeController
 from controllers.client_controller import ClientController
@@ -407,7 +408,7 @@ def contract_create():
 
         contract_number = Prompt.ask("Numéro de contrat")
         client_controller = ClientController(db)
-        if current_user.get('department') == "commercial":
+        if current_user.get('department') == Department.COMMERCIAL.value:
             available_clients = client_controller.get_my_clients(current_user)
         else:
             available_clients = client_controller.get_all_clients(current_user)
@@ -442,11 +443,7 @@ def contract_create():
             "Sélectionnez l'ID du client",
             choices=[str(cli_item.id) for cli_item in available_clients]
         )
-        try:
-            client_id = int(selected_client_id)
-        except ValueError:
-            console.print("[bold red][X]ID client invalide[/bold red]")
-            return
+        client_id = int(selected_client_id)
         total_amount = float(Prompt.ask("Montant total"))
         # Montant restant optionnel : vide = montant total
         amount_remaining = Prompt.ask(

@@ -83,6 +83,10 @@ class AuthController:
             Les informations de l'utilisateur ou None
         """
         try:
+            def _invalidate_token():
+                delete_token_file()
+                return None
+
             # Charger le token
             token = load_token_from_file()
             if not token:
@@ -92,18 +96,15 @@ class AuthController:
             payload = decode_jwt_token(token)
             if not payload:
                 # Token expiré ou invalide
-                delete_token_file()
-                return None
+                return _invalidate_token()
 
             employee_id = payload.get('employee_id')
             if employee_id is None:
-                delete_token_file()
-                return None
+                return _invalidate_token()
 
             employee = self.db.get(Employee, employee_id)
             if not employee:
-                delete_token_file()
-                return None
+                return _invalidate_token()
 
             return employee
 
