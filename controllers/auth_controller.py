@@ -19,6 +19,11 @@ class AuthController:
         self.db = db
         self.employee_controller = EmployeeController(db)
 
+    @staticmethod
+    def _invalidate_token():
+        delete_token_file()
+        return None
+
     def login(self, email: str, password: str) -> dict:
         """
         Authentifie un employé et retourne un token JWT
@@ -83,10 +88,6 @@ class AuthController:
             Les informations de l'utilisateur ou None
         """
         try:
-            def _invalidate_token():
-                delete_token_file()
-                return None
-
             # Charger le token
             token = load_token_from_file()
             if not token:
@@ -96,15 +97,15 @@ class AuthController:
             payload = decode_jwt_token(token)
             if not payload:
                 # Token expiré ou invalide
-                return _invalidate_token()
+                return self._invalidate_token()
 
             employee_id = payload.get('employee_id')
             if employee_id is None:
-                return _invalidate_token()
+                return self._invalidate_token()
 
             employee = self.db.get(Employee, employee_id)
             if not employee:
-                return _invalidate_token()
+                return self._invalidate_token()
 
             return employee
 

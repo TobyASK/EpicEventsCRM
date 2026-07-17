@@ -18,7 +18,7 @@ def _int_env(name: str, default: int) -> int:
         return int(value)
     except ValueError:
         warnings.warn(
-            f"{name} invalide ({value!r}), fallback sur {default}",
+            f"Invalid {name} value ({value!r}), using default {default}",
             RuntimeWarning,
             stacklevel=2,
         )
