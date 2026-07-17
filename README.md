@@ -15,7 +15,7 @@ Epic Events CRM est une application en ligne de commande sécurisée permettant 
 L'application suit une architecture MVC (Model-View-Controller) :
 
 ```
-projet12/
+EpicEventsCRM/
 ├── config/              # Configuration (base de données, settings)
 ├── models/              # Modèles de données (SQLAlchemy)
 ├── controllers/         # Logique métier et opérations CRUD
@@ -60,7 +60,7 @@ projet12/
 1. **Cloner le repository**
 ```bash
 git clone <votre-repo>
-cd projet12
+cd EpicEventsCRM
 ```
 
 2. **Créer un environnement virtuel**
@@ -203,7 +203,7 @@ python -m pytest tests/ --cov=controllers --cov=models --cov=utils --cov-report=
 python -m flake8 --max-line-length=100 cli/ config/ controllers/ models/ utils/ tests/ epicevents.py init_database.py
 ```
 
-91 tests unitaires et d'intégration couvrent l'authentification, le système de permissions et les opérations CRUD des 4 entités métier. Le code respecte PEP8 (0 violation flake8).
+La suite de tests unitaires et d'intégration couvre l'authentification, le système de permissions et les opérations CRUD des 4 entités métier. Le code respecte PEP8 (0 violation flake8).
 
 ## Diagramme de base de données
 

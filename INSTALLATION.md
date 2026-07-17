@@ -20,7 +20,7 @@ python3 --version
 
 ```bash
 git clone <url-du-repository>
-cd projet12
+cd EpicEventsCRM
 ```
 
 Ou télécharger et extraire le ZIP, puis ouvrir un terminal dans le dossier.
@@ -201,7 +201,7 @@ Utiliser `py` (Windows) ou `python3` (Linux/Mac).
 L'environnement virtuel n'est pas activé. Relancer `venv\Scripts\activate`.
 
 ### "unable to open database file"
-Vérifier que le dossier courant est bien `projet12/` et que `DATABASE_URL` pointe vers un chemin accessible.
+Vérifier que le dossier courant est bien `EpicEventsCRM/` et que `DATABASE_URL` pointe vers un chemin accessible.
 
 ### Token expiré
 Les tokens JWT expirent après 8 heures :

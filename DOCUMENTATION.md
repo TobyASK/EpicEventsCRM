@@ -66,7 +66,7 @@ epicevents.db            ← SQLite
 ### Structure des fichiers
 
 ```
-projet12/
+EpicEventsCRM/
 ├── config/
 │   ├── database.py      # Engine SQLite, session, init_db()
 │   └── settings.py      # JWT config, Sentry DSN
