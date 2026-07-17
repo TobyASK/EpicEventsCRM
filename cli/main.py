@@ -438,10 +438,15 @@ def contract_create():
             )
         console.print(client_table)
 
-        client_id = int(Prompt.ask(
+        selected_client_id = Prompt.ask(
             "Sélectionnez l'ID du client",
             choices=[str(cli_item.id) for cli_item in available_clients]
-        ))
+        )
+        try:
+            client_id = int(selected_client_id)
+        except ValueError:
+            console.print("[bold red][X]ID client invalide[/bold red]")
+            return
         total_amount = float(Prompt.ask("Montant total"))
         # Montant restant optionnel : vide = montant total
         amount_remaining = Prompt.ask(
