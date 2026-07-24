@@ -44,13 +44,15 @@ def create_jwt_token(
 
 
 def decode_jwt_token(token: str) -> Optional[dict]:
-    """Décode un token JWT et valide sa signature/expiration."""
+    """Décode un token JWT et valide uniquement sa signature."""
     try:
         payload = jwt.decode(
-            token, JWT_SECRET_KEY, algorithms=[JWT_ALGORITHM])
+            token,
+            JWT_SECRET_KEY,
+            algorithms=[JWT_ALGORITHM],
+            options={"verify_exp": False},
+        )
         return payload
-    except jwt.ExpiredSignatureError:
-        return None
     except jwt.InvalidTokenError:
         return None
 

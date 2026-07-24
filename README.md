@@ -1,240 +1,226 @@
 # Epic Events CRM
 
-Application CRM (Customer Relationship Management) développée pour Epic Events, entreprise spécialisée dans l'organisation d'événements pour start-ups.
+Application CRM en ligne de commande pour la gestion des employés, clients, contrats et événements.
 
-## Description
+## Objectif
 
-Epic Events CRM est une application en ligne de commande sécurisée permettant de gérer :
-- Les **clients** et leurs informations
-- Les **contrats** signés avec les clients
-- Les **événements** organisés
-- Les **employés** de l'entreprise (Commercial, Support, Gestion)
+Le projet fournit un workflow complet pour :
+- authentifier les utilisateurs par JWT ;
+- appliquer des permissions par département ;
+- gérer le cycle commercial client → contrat → événement ;
+- administrer les comptes employés.
 
-## Architecture
+## Prérequis
 
-L'application suit une architecture MVC (Model-View-Controller) :
+- Python 3.11+
+- pip
+
+## Structure
 
 ```
 projet12/
-├── config/              # Configuration (base de données, settings)
-├── models/              # Modèles de données (SQLAlchemy)
-├── controllers/         # Logique métier et opérations CRUD
-├── cli/                 # Interface en ligne de commande (Click + Rich)
-├── utils/               # Utilitaires (auth, permissions, Sentry)
-├── tests/               # Tests unitaires et d'intégration (pytest)
-├── epicevents.py        # Point d'entrée de l'application
-├── init_database.py     # Script d'initialisation de la base
-└── requirements.txt     # Dépendances Python
+├── cli/                 # Commandes Click
+├── config/              # Configuration DB et settings
+├── controllers/         # Logique métier + contrôles d'accès
+├── models/              # Modèles SQLAlchemy
+├── tests/               # Tests unitaires/intégration
+├── utils/               # Auth, permissions, logs Sentry
+├── main.py              # Entrée CLI principale
+├── init_database.py     # Initialisation DB + admin
+└── requirements.txt
 ```
 
-## Sécurité
+## Installation rapide
 
-**Protection contre les injections SQL**
-- Utilisation de **SQLAlchemy ORM** — toutes les requêtes sont paramétrées
-
-**Gestion des mots de passe**
-- Hachage avec **Argon2** (algorithme recommandé par l'OWASP)
-- Salage automatique, aucun stockage en clair
-
-**Authentification**
-- JWT (JSON Web Token) avec expiration à 8 heures
-- Token stocké localement dans `.auth_token`
-
-**Permissions**
-- Principe du moindre privilège
-- Permissions basées sur les départements
-- Vérification systématique avant chaque opération
-
-**Données sensibles**
-- Variables d'environnement via `.env`
-- `.gitignore` configuré pour exclure `.env` et la base SQLite
-
-## Installation
-
-### Prérequis
-- Python 3.9 ou supérieur
-- Aucune base de données externe requise (SQLite intégré à Python)
-
-### Étapes
-
-1. **Cloner le repository**
-```bash
-git clone <votre-repo>
-cd projet12
-```
-
-2. **Créer un environnement virtuel**
+1. Créer et activer l'environnement virtuel.
 ```bash
 python -m venv venv
-# Windows
 venv\Scripts\activate
-# Linux/Mac
-source venv/bin/activate
 ```
 
-3. **Installer les dépendances**
+2. Installer les dépendances.
 ```bash
 pip install -r requirements.txt
 ```
 
-4. **Configurer les variables d'environnement**
+3. Créer le fichier `.env`.
 ```bash
-# Windows
 copy .env.example .env
-# Linux/Mac
-cp .env.example .env
 ```
 
-Éditer `.env` et renseigner au minimum la clé JWT :
+Variables recommandées dans `.env` :
+
 ```env
 DATABASE_URL=sqlite:///./epicevents.db
-JWT_SECRET_KEY=votre-clé-secrète-très-longue-et-aléatoire
+JWT_SECRET_KEY=change-me-in-production
+AUTH_TOKEN_FILE=.auth_token
+SENTRY_DSN=
+
+DEFAULT_ADMIN_EMPLOYEE_NUMBER=ADMIN001
+DEFAULT_ADMIN_FULL_NAME=Administrateur
+DEFAULT_ADMIN_EMAIL=admin@epicevents.com
+DEFAULT_ADMIN_PASSWORD=admin123
 ```
 
-5. **Initialiser la base de données**
+4. Initialiser la base.
 ```bash
 python init_database.py
 ```
 
-Cela crée les tables et un utilisateur administrateur :
-- Email : `admin@epicevents.com`
-- Mot de passe : `admin123`
+Le compte administrateur initial est lu depuis les variables `DEFAULT_ADMIN_*`.
 
-> **Changez ce mot de passe avant toute utilisation.**
+Important : changez `JWT_SECRET_KEY` et `DEFAULT_ADMIN_PASSWORD` avant un usage en production.
 
 ## Utilisation
 
-### Connexion / déconnexion
-```bash
-python epicevents.py login
-python epicevents.py logout
-```
+Deux modes d'utilisation sont disponibles :
 
-### Gestion des employés
+1. Mode commandes directes
+2. Mode menu interactif
 
-```bash
-python epicevents.py employee create
-python epicevents.py employee list
-python epicevents.py employee update <id>
-python epicevents.py employee delete <id>
-```
-
-### Gestion des clients
+Mode menu interactif :
 
 ```bash
-python epicevents.py client create
-python epicevents.py client list
-python epicevents.py client list --mine      # Mes clients uniquement
-python epicevents.py client update <id>
+python main.py
 ```
 
-### Gestion des contrats
+Connexion / déconnexion :
+```bash
+python main.py login
+python main.py logout
+```
+
+Commandes principales :
+```bash
+python main.py employee create
+python main.py employee list
+python main.py client create
+python main.py client list --mine
+python main.py contract create
+python main.py contract list --unsigned
+python main.py contract sign <id>
+python main.py event list --no-support
+python main.py event assign-support <event_id> <support_id>
+```
+
+Lors de `contract create`, la CLI :
+- affiche les clients disponibles ;
+- propose les commerciaux disponibles ;
+- permet de sélectionner explicitement le contact commercial (avec valeur par défaut issue du client).
+
+## Fonctionnement interne (concret)
+
+### 1. Point d'entrée
+
+- `main.py` initialise la base via `init_db()` puis :
+	- lance les commandes CLI si des arguments sont fournis ;
+	- lance un menu interactif sinon.
+- Les commandes sont définies dans `cli/cli.py`.
+
+### 2. Exécution d'une action
+
+Chaque commande passe par `run_with_db()` dans `cli/cli.py` :
+
+1. ouverture d'une session SQLAlchemy (`SessionLocal`) ;
+2. vérification d'authentification si l'action est protégée (`require_auth`) ;
+3. exécution de la logique métier dans un contrôleur ;
+4. affichage du résultat ;
+5. fermeture garantie de la session DB.
+
+### 3. Authentification et session
+
+- `login` (`AuthController.login` dans `controllers/auth_controller.py`) :
+	- charge l'employé par email ;
+	- vérifie le mot de passe haché Argon2 (`utils/auth.py`) ;
+	- crée un JWT ;
+	- sauvegarde le token localement (`AUTH_TOKEN_FILE`).
+- `get_current_user` : lit le token, valide sa signature, puis recharge l'employé en base.
+- `logout` : supprime le fichier token local.
+
+### 4. Permissions et autorisation
+
+- La matrice des permissions est définie dans `utils/permissions.py`.
+- Les contrôleurs vérifient les droits avant toute lecture/écriture.
+- Exemple de logique par rôle :
+	- commercial : clients propres, événements de ses contrats signés ;
+	- support : événements assignés ;
+	- gestion : employés, contrats, signatures, assignation support.
+
+### 5. Logique métier par domaine
+
+- Employés : `controllers/employee_controller.py`
+- Clients : `controllers/client_controller.py`
+- Contrats : `controllers/contract_controller.py`
+- Événements : `controllers/event_controller.py`
+
+Règles clés implémentées :
+
+1. un contrat doit être signé avant création d'événement ;
+2. un support ne modifie que ses événements ;
+3. un commercial ne modifie que ses clients ;
+4. création de contrat avec sélection explicite du contact commercial.
+
+### 6. Modèle de données
+
+Les entités SQLAlchemy sont dans `models/` :
+
+- `Employee`
+- `Client`
+- `Contract`
+- `Event`
+
+Le schéma relationnel est fourni dans `diagramme_bdd.pdf`.
+
+### 7. Journalisation et erreurs
+
+- Sentry est initialisé au démarrage CLI (`init_sentry` dans `utils/sentry_logger.py`).
+- Les contrôleurs journalisent les exceptions (`log_exception`).
+- Certains événements métier sont loggés (ex. signature de contrat).
+
+### 8. Tests
+
+- Les tests sont dans `tests/`.
+- Ils couvrent permissions, authentification et règles métier principales.
+- Exécution :
 
 ```bash
-python epicevents.py contract create
-python epicevents.py contract list
-python epicevents.py contract list --unsigned   # Non signés
-python epicevents.py contract list --unpaid     # Non payés
-python epicevents.py contract update <id>
-python epicevents.py contract sign <id>
+pytest -q
 ```
 
-### Gestion des événements
+## Permissions
+
+- Commercial: crée/modifie ses clients, crée des événements sur contrats signés de ses clients.
+- Support: lit et modifie uniquement ses événements assignés.
+- Gestion: admin employés, contrats (création, modification, signature) et assignation support.
+
+## Sécurité
+
+- ORM SQLAlchemy (requêtes paramétrées).
+- Hachage mots de passe avec Argon2.
+- Session persistante via token stocké dans un fichier (`AUTH_TOKEN_FILE`).
+- Contrôle d'accès systématique en contrôleurs.
+- Variables sensibles via `.env`.
+
+## Qualité
+
+Validation locale :
+```bash
+python -m compileall -q .
+pytest -q
+```
+
+Rapport de couverture (optionnel) :
 
 ```bash
-python epicevents.py event create
-python epicevents.py event list
-python epicevents.py event list --mine          # Mes événements (Support)
-python epicevents.py event list --no-support    # Sans support assigné
-python epicevents.py event update <id>
-python epicevents.py event assign-support <event_id> <support_id>
+pytest --cov=. --cov-report=term-missing
 ```
 
-## Permissions par département
+État actuel validé : `92 passed`.
 
-### Tous les collaborateurs (lecture seule)
-- Accès en lecture à tous les clients, contrats et événements
+## Présentation technique
 
-### Commercial
-- Créer et modifier ses propres clients (auto-assigné à la création)
-- Modifier les contrats de ses clients
-- Filtrer les contrats (non signés, non payés)
-- Créer des événements pour ses clients ayant un contrat signé
+Le diagramme de base est disponible dans `diagramme_bdd.pdf`.
 
-### Support
-- Voir et modifier ses propres événements (ceux qui lui sont assignés)
+## Note
 
-### Gestion
-- Créer, modifier et **supprimer** des employés
-- Créer, modifier et **signer** des contrats
-- **Assigner** un membre du support à un événement
-
-## Modèle de données
-
-### Employee
-`id` · `employee_number` · `full_name` · `email` · `password_hash` · `department`
-
-### Client
-`id` · `full_name` · `email` · `phone` · `company_name` · `created_date` · `last_contact_date` · `commercial_contact_id`
-
-### Contract
-`id` · `contract_number` · `total_amount` · `amount_remaining` · `is_signed` · `created_date` · `client_id` · `commercial_contact_id`
-
-### Event
-`id` · `event_name` · `event_date_start` · `event_date_end` · `location` · `attendees` · `notes` · `created_date` · `contract_id` · `support_contact_id`
-
-## Journalisation avec Sentry
-
-Configurez `SENTRY_DSN` dans `.env` pour activer :
-- Toutes les exceptions
-- Création et modification d'employés
-- Signature de contrats
-
-## Tests et qualité de code
-
-```bash
-# Lancer la suite de tests
-python -m pytest tests/ -v
-
-# Avec couverture de code
-python -m pytest tests/ --cov=controllers --cov=models --cov=utils --cov-report=term-missing
-
-# Vérifier la conformité PEP8
-python -m flake8 --max-line-length=100 cli/ config/ controllers/ models/ utils/ tests/ epicevents.py init_database.py
-```
-
-91 tests unitaires et d'intégration couvrent l'authentification, le système de permissions et les opérations CRUD des 4 entités métier. Le code respecte PEP8 (0 violation flake8).
-
-## Diagramme de base de données
-
-Le diagramme de classes UML (`diagramme_bdd.png`) décrit les 4 entités et leurs relations (associations, compositions avec cascade, multiplicités). Voir [BDD_EXPLANATION.md](BDD_EXPLANATION.md) pour le détail des règles d'intégrité.
-
-## Documentation complémentaire
-
-- [INSTALLATION.md](INSTALLATION.md) — guide d'installation pas à pas
-- [GUIDE_COMMANDES.md](GUIDE_COMMANDES.md) — référence complète des commandes CLI
-- [DOCUMENTATION.md](DOCUMENTATION.md) — documentation technique détaillée (architecture, sécurité, permissions)
-- [BDD_EXPLANATION.md](BDD_EXPLANATION.md) — modèle de données et conventions du diagramme
-
-## Technologies
-
-- **Python 3.9+**
-- **SQLAlchemy 2.0** — ORM, protection anti-injection SQL
-- **SQLite** — base de données embarquée (aucune installation requise)
-- **Click** — framework CLI
-- **Rich** — interface CLI enrichie
-- **Argon2** — hachage de mots de passe
-- **PyJWT** — tokens JWT
-- **Sentry** — journalisation des erreurs
-- **python-dotenv** — variables d'environnement
-- **pytest / pytest-cov** — tests unitaires et d'intégration, couverture de code
-- **flake8** — conformité PEP8
-
-## Licence
-
-Ce projet est développé pour Epic Events dans le cadre d'un projet pédagogique OpenClassrooms.
-
----
-
-> Ne jamais commiter le fichier `.env` ni le fichier `epicevents.db`.
-> Changer le mot de passe administrateur par défaut avant toute utilisation réelle.
+Ne pas versionner `.env`, `.auth_token`, ni `epicevents.db`.
