@@ -1,17 +1,10 @@
-"""
-Modèle Client - Représente un client d'Epic Events
-"""
 from sqlalchemy import Column, Integer, String, DateTime, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from config.database import Base
+from config import Base
 
 
 class Client(Base):
-    """
-    Modèle Client
-    Représente un client de l'entreprise
-    """
     __tablename__ = "clients"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -26,11 +19,9 @@ class Client(Base):
         onupdate=datetime.utcnow,
         nullable=False)
 
-    # Clé étrangère vers le commercial responsable
     commercial_contact_id = Column(
         Integer, ForeignKey("employees.id"), nullable=False)
 
-    # Relations
     commercial_contact = relationship(
         "Employee",
         back_populates="clients",

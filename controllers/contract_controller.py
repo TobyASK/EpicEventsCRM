@@ -1,19 +1,37 @@
-"""
-Controller pour la gestion des contrats
-"""
+from sqlalchemy import false
 from sqlalchemy.orm import Session
-from models.contract import Contract
-from models.client import Client
-from utils.permissions import Permission, check_permission
-from utils.sentry_logger import log_exception, log_contract_signed
+from models import Contract, Client, Employee, Department
+from utils import (
+    Permission,
+    check_permission,
+    log_exception,
+    log_contract_signed,
+)
 from typing import List, Optional
 
 
 class ContractController:
-    """Contrôleur pour gérer les opérations CRUD sur les contrats"""
 
     def __init__(self, db: Session):
+        """Initialise le contrôleur des contrats."""
         self.db = db
+
+    def _require(self, current_user: dict, permission: str, message: str):
+        """Valide une permission et lève une erreur si refusée."""
+        if not check_permission(current_user.get('department'), permission):
+            raise PermissionError(message)
+
+    def _get_contract(self, contract_id: int) -> Optional[Contract]:
+        """Récupère un contrat par son identifiant."""
+        return self.db.query(Contract).filter(Contract.id == contract_id).first()
+
+    def _get_client(self, client_id: int) -> Optional[Client]:
+        """Récupère un client par son identifiant."""
+        return self.db.query(Client).filter(Client.id == client_id).first()
+
+    def _get_employee(self, employee_id: int) -> Optional[Employee]:
+        """Récupère un employé par son identifiant."""
+        return self.db.query(Employee).filter(Employee.id == employee_id).first()
 
     def create_contract(
         self,
@@ -21,49 +39,42 @@ class ContractController:
         contract_number: str,
         client_id: int,
         total_amount: float,
-        amount_remaining: float = None
+        amount_remaining: float = None,
+        commercial_contact_id: int = None,
     ) -> Contract:
-        """
-        Crée un nouveau contrat
-
-        Args:
-            current_user: L'utilisateur authentifié
-            contract_number: Numéro de contrat
-            client_id: ID du client
-            total_amount: Montant total
-            amount_remaining: Montant restant (par défaut = montant total)
-
-        Returns:
-            Le contrat créé
-        """
+        """Crée un nouveau contrat."""
         try:
-            # Vérifier les permissions
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.CREATE_CONTRACT):
-                raise PermissionError(
-                    "Permission refusée pour créer un contrat")
+            self._require(
+                current_user,
+                Permission.CREATE_CONTRACT,
+                "Permission refusée pour créer un contrat",
+            )
 
-            # Vérifier que le contrat n'existe pas
             existing = self.db.query(Contract).filter(
                 Contract.contract_number == contract_number).first()
             if existing:
                 raise ValueError(
                     f"Le contrat {contract_number} existe déjà")
 
-            # Vérifier que le client existe
-            client = self.db.query(Client).filter(
-                Client.id == client_id).first()
+            client = self._get_client(client_id)
             if not client:
                 raise ValueError(f"Client {client_id} non trouvé")
 
-            # Par défaut, le montant restant = montant total
             if amount_remaining is None:
                 amount_remaining = total_amount
 
-            # Le contact commercial du contrat = l'utilisateur courant
-            commercial_contact_id = current_user.get('employee_id')
+            if commercial_contact_id is None:
+                commercial_contact_id = client.commercial_contact_id
 
-            # Créer le contrat
+            commercial_contact = self._get_employee(commercial_contact_id)
+            if not commercial_contact:
+                raise ValueError(
+                    f"Employé commercial {commercial_contact_id} non trouvé")
+
+            if commercial_contact.department != Department.COMMERCIAL:
+                raise ValueError(
+                    f"L'employé {commercial_contact.full_name} n'est pas commercial")
+
             contract = Contract(
                 contract_number=contract_number,
                 client_id=client_id,
@@ -88,20 +99,13 @@ class ContractController:
             raise
 
     def get_all_contracts(self, current_user: dict) -> List[Contract]:
-        """
-        Récupère tous les contrats
-
-        Args:
-            current_user: L'utilisateur authentifié
-
-        Returns:
-            Liste des contrats
-        """
+        """Liste tous les contrats."""
         try:
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.READ_ALL_CONTRACTS):
-                raise PermissionError(
-                    "Permission refusée pour lire les contrats")
+            self._require(
+                current_user,
+                Permission.READ_ALL_CONTRACTS,
+                "Permission refusée pour lire les contrats",
+            )
 
             return self.db.query(Contract).all()
 
@@ -112,24 +116,14 @@ class ContractController:
     def get_contract_by_id(
         self, current_user: dict, contract_id: int
     ) -> Optional[Contract]:
-        """
-        Récupère un contrat par son ID
-
-        Args:
-            current_user: L'utilisateur authentifié
-            contract_id: ID du contrat
-
-        Returns:
-            Le contrat ou None
-        """
+        """Récupère un contrat par son identifiant."""
         try:
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.READ_ALL_CONTRACTS):
-                raise PermissionError(
-                    "Permission refusée pour lire les contrats")
-
-            return self.db.query(Contract).filter(
-                Contract.id == contract_id).first()
+            self._require(
+                current_user,
+                Permission.READ_ALL_CONTRACTS,
+                "Permission refusée pour lire les contrats",
+            )
+            return self._get_contract(contract_id)
 
         except Exception as e:
             log_exception(e, {
@@ -139,46 +133,27 @@ class ContractController:
             raise
 
     def get_unsigned_contracts(self, current_user: dict) -> List[Contract]:
-        """
-        Récupère les contrats non signés
-
-        Args:
-            current_user: L'utilisateur authentifié
-
-        Returns:
-            Liste des contrats non signés
-        """
+        """Liste les contrats non signés."""
         try:
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.READ_ALL_CONTRACTS):
-                raise PermissionError(
-                    "Permission refusée pour lire les contrats")
-
-            # == False (et non `is False`) est requis par SQLAlchemy
-            # pour générer le SQL
-            return self.db.query(Contract).filter(
-                Contract.is_signed == False  # noqa: E712
-            ).all()
+            self._require(
+                current_user,
+                Permission.READ_ALL_CONTRACTS,
+                "Permission refusée pour lire les contrats",
+            )
+            return self.db.query(Contract).filter(Contract.is_signed == false()).all()
 
         except Exception as e:
             log_exception(e, {"action": "get_unsigned_contracts"})
             raise
 
     def get_unpaid_contracts(self, current_user: dict) -> List[Contract]:
-        """
-        Récupère les contrats non payés
-
-        Args:
-            current_user: L'utilisateur authentifié
-
-        Returns:
-            Liste des contrats avec montant restant > 0
-        """
+        """Liste les contrats ayant un reste à payer."""
         try:
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.READ_ALL_CONTRACTS):
-                raise PermissionError(
-                    "Permission refusée pour lire les contrats")
+            self._require(
+                current_user,
+                Permission.READ_ALL_CONTRACTS,
+                "Permission refusée pour lire les contrats",
+            )
 
             return self.db.query(Contract).filter(
                 Contract.amount_remaining > 0).all()
@@ -193,27 +168,7 @@ class ContractController:
         contract_id: int,
         **kwargs
     ) -> Contract:
-        """
-        Met à jour un contrat.
-
-        Gestion peut modifier tous les contrats.
-        Commercial peut modifier uniquement les contrats dont il
-        est le contact commercial.
-
-        Args:
-            current_user: L'utilisateur authentifié
-            contract_id: ID du contrat à modifier
-            **kwargs: Champs à mettre à jour (total_amount,
-                amount_remaining)
-
-        Returns:
-            Le contrat modifié
-
-        Raises:
-            PermissionError: Si l'utilisateur n'a pas les permissions
-                requises
-            ValueError: Si le contrat n'existe pas
-        """
+        """Met à jour un contrat existant."""
         try:
             dept = current_user.get('department')
             can_all = check_permission(dept, Permission.UPDATE_CONTRACT)
@@ -224,8 +179,7 @@ class ContractController:
                 raise PermissionError(
                     "Permission refusée pour modifier un contrat")
 
-            contract = self.db.query(Contract).filter(
-                Contract.id == contract_id).first()
+            contract = self._get_contract(contract_id)
             if not contract:
                 raise ValueError(f"Contrat {contract_id} non trouvé")
 
@@ -257,26 +211,15 @@ class ContractController:
     def sign_contract(
         self, current_user: dict, contract_id: int
     ) -> Contract:
-        """
-        Signe un contrat
-
-        Args:
-            current_user: L'utilisateur authentifié
-            contract_id: ID du contrat
-
-        Returns:
-            Le contrat signé
-        """
+        """Signe un contrat non encore signé."""
         try:
-            # Vérifier les permissions
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.SIGN_CONTRACT):
-                raise PermissionError(
-                    "Permission refusée pour signer un contrat")
+            self._require(
+                current_user,
+                Permission.SIGN_CONTRACT,
+                "Permission refusée pour signer un contrat",
+            )
 
-            # Récupérer le contrat
-            contract = self.db.query(Contract).filter(
-                Contract.id == contract_id).first()
+            contract = self._get_contract(contract_id)
             if not contract:
                 raise ValueError(f"Contrat {contract_id} non trouvé")
 
@@ -285,13 +228,11 @@ class ContractController:
                     f"Le contrat {contract.contract_number} "
                     "est déjà signé")
 
-            # Signer le contrat
             contract.is_signed = True
 
             self.db.commit()
             self.db.refresh(contract)
 
-            # Journaliser la signature
             log_contract_signed(
                 contract.contract_number, contract.client.full_name)
 

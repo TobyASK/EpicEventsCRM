@@ -1,17 +1,11 @@
-"""
-Tests unitaires et d'intégration — ClientController.
-"""
 import pytest
 from controllers.client_controller import ClientController
 
 
-# ── Fixture locale : second commercial pour tester l'isolation ──────────
-
 @pytest.fixture
 def other_commercial(db_session):
-    """Un second commercial sans lien avec les clients du premier."""
-    from models.employee import Employee, Department
-    from utils.auth import hash_password
+    from models import Employee, Department
+    from utils import hash_password
     emp = Employee(
         employee_number="COM002",
         full_name="Other Commercial",
@@ -29,10 +23,7 @@ def other_commercial(db_session):
     }
 
 
-# ── Tests ───────────────────────────────────────────────────────────────
-
 def test_create_client(db_session, commercial_user):
-    """Un commercial peut créer un client (auto-assigné comme contact)."""
     ctrl = ClientController(db_session)
     client = ctrl.create_client(
         commercial_user,
@@ -45,7 +36,6 @@ def test_create_client(db_session, commercial_user):
 
 
 def test_create_client_duplicate_email(db_session, commercial_user):
-    """Créer deux clients avec le même email lève ValueError."""
     ctrl = ClientController(db_session)
     ctrl.create_client(
         commercial_user, "Client A", "dup@test.com", "+1", "Co A")
@@ -55,14 +45,12 @@ def test_create_client_duplicate_email(db_session, commercial_user):
 
 
 def test_admin_cannot_create_client(db_session, admin_user):
-    """La gestion n'a pas la permission de créer un client."""
     ctrl = ClientController(db_session)
     with pytest.raises(PermissionError):
         ctrl.create_client(admin_user, "X", "x@x.com", "+0", "X")
 
 
 def test_get_all_clients(db_session, commercial_user):
-    """Tous les collaborateurs peuvent lister les clients."""
     ctrl = ClientController(db_session)
     ctrl.create_client(commercial_user, "A", "a@test.com", "+1", "Co A")
     ctrl.create_client(commercial_user, "B", "b@test.com", "+2", "Co B")
@@ -70,7 +58,6 @@ def test_get_all_clients(db_session, commercial_user):
 
 
 def test_get_my_clients(db_session, commercial_user, other_commercial):
-    """get_my_clients ne retourne que les clients du commercial connecté."""
     ctrl = ClientController(db_session)
     ctrl.create_client(
         commercial_user, "Mine", "mine@test.com", "+1", "Co")
@@ -82,7 +69,6 @@ def test_get_my_clients(db_session, commercial_user, other_commercial):
 
 
 def test_update_own_client(db_session, commercial_user):
-    """Un commercial peut modifier ses propres clients."""
     ctrl = ClientController(db_session)
     c = ctrl.create_client(
         commercial_user, "Original", "orig@test.com", "+1", "OldCo")
@@ -96,7 +82,7 @@ def test_update_own_client(db_session, commercial_user):
 def test_update_other_commercial_client_forbidden(
     db_session, commercial_user, other_commercial
 ):
-    """Un commercial ne peut pas modifier le client d'un autre."""
+    """Vérifie qu'un commercial ne peut pas modifier un client d'un autre."""
     ctrl = ClientController(db_session)
     c = ctrl.create_client(
         other_commercial, "Theirs", "theirs@test.com", "+1", "Co")
@@ -107,7 +93,7 @@ def test_update_other_commercial_client_forbidden(
 def test_support_cannot_update_client(
     db_session, support_user, commercial_user
 ):
-    """Un support n'a pas la permission de modifier un client."""
+    """Vérifie qu'un support ne peut pas modifier un client."""
     ctrl = ClientController(db_session)
     c = ctrl.create_client(
         commercial_user, "C", "c@test.com", "+1", "Co")

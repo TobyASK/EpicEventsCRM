@@ -1,6 +1,3 @@
-"""
-Tests unitaires et d'intégration — EventController.
-"""
 import pytest
 from datetime import datetime
 from controllers.client_controller import ClientController
@@ -8,23 +5,15 @@ from controllers.contract_controller import ContractController
 from controllers.event_controller import EventController
 
 
-# ── Helpers / fixtures locales ──────────────────────────────────────────
-
 START = datetime(2026, 9, 1, 14, 0)
 END = datetime(2026, 9, 1, 18, 0)
 
 
 @pytest.fixture
 def setup(db_session, admin_user, commercial_user):
-    """
-    Retourne un contrat signé appartenant au commercial_user,
-    prêt à servir de base pour les tests d'événements.
-    """
-    # Client du commercial
     client = ClientController(db_session).create_client(
         commercial_user, "Evt Client", "evt@test.com", "+1", "Evt Co"
     )
-    # Contrat créé par gestion, contact commercial = commercial_user
     cc = ContractController(db_session)
     contract = cc.create_contract(
         admin_user, "CT-EVT", client.id, 5000.0)
@@ -36,9 +25,8 @@ def setup(db_session, admin_user, commercial_user):
 
 @pytest.fixture
 def other_commercial(db_session):
-    """Second commercial indépendant."""
-    from models.employee import Employee, Department
-    from utils.auth import hash_password
+    from models import Employee, Department
+    from utils import hash_password
     emp = Employee(
         employee_number="COM002",
         full_name="Other Commercial",
@@ -56,10 +44,7 @@ def other_commercial(db_session):
     }
 
 
-# ── Tests création ──────────────────────────────────────────────────────
-
 def test_create_event(db_session, commercial_user, setup):
-    """Un commercial peut créer un événement sur son contrat signé."""
     ctrl = EventController(db_session)
     evt = ctrl.create_event(
         commercial_user, setup["contract"].id, "Launch Party",
@@ -73,7 +58,7 @@ def test_create_event(db_session, commercial_user, setup):
 def test_create_event_unsigned_contract(
     db_session, admin_user, commercial_user, setup
 ):
-    """Créer un événement sur un contrat non signé lève ValueError."""
+    """Vérifie qu'un événement ne peut pas être créé sur un contrat non signé."""
     cc = ContractController(db_session)
     unsigned = cc.create_contract(
         admin_user, "CT-UNSIG", setup["client"].id, 1000.0)
@@ -88,7 +73,7 @@ def test_create_event_unsigned_contract(
 def test_create_event_wrong_commercial(
     db_session, other_commercial, setup
 ):
-    """Un commercial ne peut pas créer d'événement pour un autre."""
+    """Vérifie qu'un commercial ne peut pas créer un événement hors de son périmètre."""
     with pytest.raises(PermissionError, match="propres clients"):
         EventController(db_session).create_event(
             other_commercial, setup["contract"].id, "Stolen",
@@ -99,7 +84,7 @@ def test_create_event_wrong_commercial(
 def test_create_event_duplicate_contract(
     db_session, commercial_user, setup
 ):
-    """Un contrat ne peut avoir qu'un seul événement."""
+    """Vérifie qu'un contrat ne peut pas porter deux événements."""
     ctrl = EventController(db_session)
     ctrl.create_event(
         commercial_user, setup["contract"].id, "First",
@@ -111,17 +96,13 @@ def test_create_event_duplicate_contract(
 
 
 def test_admin_cannot_create_event(db_session, admin_user, setup):
-    """Gestion n'a pas la permission de créer un événement."""
     with pytest.raises(PermissionError):
         EventController(db_session).create_event(
             admin_user, setup["contract"].id, "X", START, END, "X", 1
         )
 
 
-# ── Tests lecture ───────────────────────────────────────────────────────
-
 def test_get_all_events(db_session, commercial_user, setup):
-    """get_all_events retourne tous les événements."""
     ctrl = EventController(db_session)
     ctrl.create_event(
         commercial_user, setup["contract"].id, "E1",
@@ -130,12 +111,10 @@ def test_get_all_events(db_session, commercial_user, setup):
 
 
 def test_get_my_events(db_session, commercial_user, support_user, setup):
-    """get_my_events ne retourne que les événements du support."""
     ec = EventController(db_session)
     evt = ec.create_event(
         commercial_user, setup["contract"].id, "E",
         START, END, "P", 10)
-    # Assigner support
     ec.assign_support(
         {"employee_id": 0, "email": "x", "department": "gestion"},
         evt.id, support_user["employee_id"]
@@ -148,7 +127,7 @@ def test_get_my_events(db_session, commercial_user, support_user, setup):
 def test_get_events_without_support(
     db_session, admin_user, commercial_user, setup
 ):
-    """get_events_without_support ne retourne que les non assignés."""
+    """Vérifie le filtrage des événements sans support assigné."""
     ctrl = EventController(db_session)
     evt = ctrl.create_event(
         commercial_user, setup["contract"].id, "NoSupport",
@@ -157,12 +136,10 @@ def test_get_events_without_support(
     assert any(e.id == evt.id for e in results)
 
 
-# ── Tests mise à jour ───────────────────────────────────────────────────
-
 def test_support_can_update_own_event(
     db_session, admin_user, commercial_user, support_user, setup
 ):
-    """Un support peut modifier l'événement qui lui est assigné."""
+    """Vérifie qu'un support assigné peut modifier son événement."""
     ec = EventController(db_session)
     evt = ec.create_event(
         commercial_user, setup["contract"].id, "Before",
@@ -180,7 +157,7 @@ def test_support_can_update_own_event(
 def test_support_cannot_update_unassigned_event(
     db_session, commercial_user, support_user, setup
 ):
-    """Un support ne peut pas modifier un événement non assigné."""
+    """Vérifie qu'un support non assigné ne peut pas modifier l'événement."""
     ec = EventController(db_session)
     evt = ec.create_event(
         commercial_user, setup["contract"].id, "NotMine",
@@ -192,7 +169,7 @@ def test_support_cannot_update_unassigned_event(
 def test_commercial_cannot_update_event(
     db_session, commercial_user, setup
 ):
-    """Un commercial n'a pas la permission de modifier un événement."""
+    """Vérifie qu'un commercial ne peut pas modifier un événement."""
     ec = EventController(db_session)
     evt = ec.create_event(
         commercial_user, setup["contract"].id, "CannotEdit",
@@ -201,12 +178,10 @@ def test_commercial_cannot_update_event(
         ec.update_event(commercial_user, evt.id, event_name="X")
 
 
-# ── Tests assignation support ───────────────────────────────────────────
-
 def test_assign_support(
     db_session, admin_user, commercial_user, support_user, setup
 ):
-    """Gestion peut assigner un support à un événement."""
+    """Vérifie l'assignation d'un support par un gestionnaire."""
     ec = EventController(db_session)
     evt = ec.create_event(
         commercial_user, setup["contract"].id, "Assign Test",
@@ -219,7 +194,7 @@ def test_assign_support(
 def test_assign_non_support_employee(
     db_session, admin_user, commercial_user, setup
 ):
-    """Assigner un employé hors département support lève ValueError."""
+    """Vérifie le refus d'assignation d'un employé non support."""
     ec = EventController(db_session)
     evt = ec.create_event(
         commercial_user, setup["contract"].id, "Assign Fail",
@@ -232,7 +207,7 @@ def test_assign_non_support_employee(
 def test_commercial_cannot_assign_support(
     db_session, commercial_user, support_user, setup
 ):
-    """Un commercial n'a pas la permission d'assigner un support."""
+    """Vérifie qu'un commercial ne peut pas assigner un support."""
     ec = EventController(db_session)
     evt = ec.create_event(
         commercial_user, setup["contract"].id, "No Assign",

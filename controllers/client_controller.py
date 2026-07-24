@@ -1,19 +1,24 @@
-"""
-Controller pour la gestion des clients
-"""
 from sqlalchemy.orm import Session
-from models.client import Client
-from utils.permissions import Permission, check_permission
-from utils.sentry_logger import log_exception
+from models import Client
+from utils import Permission, check_permission, log_exception
 from typing import List, Optional
 from datetime import datetime
 
 
 class ClientController:
-    """Contrôleur pour gérer les opérations CRUD sur les clients"""
 
     def __init__(self, db: Session):
+        """Initialise le contrôleur des clients."""
         self.db = db
+
+    def _require(self, current_user: dict, permission: str, message: str):
+        """Valide une permission et lève une erreur si refusée."""
+        if not check_permission(current_user.get('department'), permission):
+            raise PermissionError(message)
+
+    def _get_client(self, client_id: int) -> Optional[Client]:
+        """Récupère un client par son identifiant."""
+        return self.db.query(Client).filter(Client.id == client_id).first()
 
     def create_client(
         self,
@@ -23,34 +28,20 @@ class ClientController:
         phone: str,
         company_name: str
     ) -> Client:
-        """
-        Crée un nouveau client
-
-        Args:
-            current_user: L'utilisateur authentifié
-            full_name: Nom complet
-            email: Email
-            phone: Téléphone
-            company_name: Nom de l'entreprise
-
-        Returns:
-            Le client créé
-        """
+        """Crée un nouveau client."""
         try:
-            # Vérifier les permissions
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.CREATE_CLIENT):
-                raise PermissionError(
-                    "Permission refusée pour créer un client")
+            self._require(
+                current_user,
+                Permission.CREATE_CLIENT,
+                "Permission refusée pour créer un client",
+            )
 
-            # Vérifier que l'email n'existe pas
             existing = self.db.query(Client).filter(
                 Client.email == email).first()
             if existing:
                 raise ValueError(
                     f"Un client avec l'email {email} existe déjà")
 
-            # Créer le client
             client = Client(
                 full_name=full_name,
                 email=email,
@@ -71,20 +62,13 @@ class ClientController:
             raise
 
     def get_all_clients(self, current_user: dict) -> List[Client]:
-        """
-        Récupère tous les clients
-
-        Args:
-            current_user: L'utilisateur authentifié
-
-        Returns:
-            Liste des clients
-        """
+        """Liste tous les clients."""
         try:
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.READ_ALL_CLIENTS):
-                raise PermissionError(
-                    "Permission refusée pour lire les clients")
+            self._require(
+                current_user,
+                Permission.READ_ALL_CLIENTS,
+                "Permission refusée pour lire les clients",
+            )
 
             return self.db.query(Client).all()
 
@@ -95,20 +79,10 @@ class ClientController:
     def get_client_by_id(
         self, current_user: dict, client_id: int
     ) -> Optional[Client]:
-        """
-        Récupère un client par son ID
-
-        Args:
-            current_user: L'utilisateur authentifié
-            client_id: ID du client
-
-        Returns:
-            Le client ou None
-        """
+        """Récupère un client par ID selon les droits du profil."""
         try:
             dept = current_user.get('department')
             if not check_permission(dept, Permission.READ_ALL_CLIENTS):
-                # Vérifier si c'est son propre client
                 if check_permission(dept, Permission.READ_OWN_CLIENTS):
                     employee_id = current_user.get('employee_id')
                     return self.db.query(Client).filter(
@@ -118,8 +92,7 @@ class ClientController:
                 raise PermissionError(
                     "Permission refusée pour lire ce client")
 
-            return self.db.query(Client).filter(
-                Client.id == client_id).first()
+            return self._get_client(client_id)
 
         except Exception as e:
             log_exception(
@@ -127,15 +100,7 @@ class ClientController:
             raise
 
     def get_my_clients(self, current_user: dict) -> List[Client]:
-        """
-        Récupère les clients d'un commercial
-
-        Args:
-            current_user: L'utilisateur authentifié
-
-        Returns:
-            Liste des clients
-        """
+        """Liste les clients rattachés au commercial courant."""
         try:
             employee_id = current_user.get('employee_id')
             return self.db.query(Client).filter(
@@ -152,37 +117,23 @@ class ClientController:
         client_id: int,
         **kwargs
     ) -> Client:
-        """
-        Met à jour un client
-
-        Args:
-            current_user: L'utilisateur authentifié
-            client_id: ID du client
-            **kwargs: Champs à mettre à jour
-
-        Returns:
-            Le client modifié
-        """
+        """Met à jour un client appartenant au commercial courant."""
         try:
-            # Récupérer le client
-            client = self.db.query(Client).filter(
-                Client.id == client_id).first()
+            client = self._get_client(client_id)
             if not client:
                 raise ValueError(f"Client {client_id} non trouvé")
 
-            # Vérifier les permissions
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.UPDATE_OWN_CLIENTS):
-                raise PermissionError(
-                    "Permission refusée pour modifier un client")
+            self._require(
+                current_user,
+                Permission.UPDATE_OWN_CLIENTS,
+                "Permission refusée pour modifier un client",
+            )
 
-            # Vérifier que c'est son propre client
             employee_id = current_user.get('employee_id')
             if client.commercial_contact_id != employee_id:
                 raise PermissionError(
                     "Vous ne pouvez modifier que vos propres clients")
 
-            # Mettre à jour les champs
             if 'full_name' in kwargs:
                 client.full_name = kwargs['full_name']
             if 'email' in kwargs:

@@ -1,11 +1,6 @@
-"""
-Tests unitaires — système de permissions (utils/permissions.py).
-"""
-from utils.permissions import Permission, check_permission, has_permission
-from models.employee import Department
+from utils import Permission, check_permission, has_permission
+from models import Department
 
-
-# ── has_permission / check_permission ───────────────────────────────────
 
 class TestCommercialPermissions:
     dept = "commercial"
@@ -121,17 +116,13 @@ class TestGestionPermissions:
         assert not check_permission(self.dept, Permission.CREATE_EVENT)
 
 
-# ── Cas limites ─────────────────────────────────────────────────────────
-
 def test_unknown_department_returns_false():
-    """Un département inconnu ne doit donner aucune permission."""
     assert check_permission("superadmin", Permission.CREATE_CLIENT) is False
     assert check_permission("", Permission.READ_ALL_EVENTS) is False
     assert check_permission(None, Permission.DELETE_EMPLOYEE) is False
 
 
 def test_has_permission_with_enum():
-    """has_permission fonctionne directement avec l'enum Department."""
     assert has_permission(
         Department.GESTION, Permission.SIGN_CONTRACT) is True
     assert has_permission(

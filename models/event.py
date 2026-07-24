@@ -1,17 +1,10 @@
-"""
-Modèle Event - Représente un événement organisé pour un client
-"""
 from sqlalchemy import Column, Integer, String, DateTime, Text, ForeignKey
 from sqlalchemy.orm import relationship
 from datetime import datetime
-from config.database import Base
+from config import Base
 
 
 class Event(Base):
-    """
-    Modèle Event
-    Représente un événement organisé dans le cadre d'un contrat
-    """
     __tablename__ = "events"
 
     id = Column(Integer, primary_key=True, index=True)
@@ -23,7 +16,6 @@ class Event(Base):
     notes = Column(Text, nullable=True)
     created_date = Column(DateTime, default=datetime.utcnow, nullable=False)
 
-    # Clés étrangères
     contract_id = Column(
         Integer,
         ForeignKey("contracts.id"),
@@ -32,7 +24,6 @@ class Event(Base):
     support_contact_id = Column(
         Integer, ForeignKey("employees.id"), nullable=True)
 
-    # Relations
     contract = relationship("Contract", back_populates="event")
     support_contact = relationship("Employee", back_populates="events")
 

@@ -1,21 +1,32 @@
-"""
-Controller pour la gestion des événements
-"""
 from sqlalchemy.orm import Session
-from models.event import Event
-from models.contract import Contract
-from models.employee import Employee
-from utils.permissions import Permission, check_permission
-from utils.sentry_logger import log_exception
+from models import Event, Contract, Employee
+from utils import Permission, check_permission, log_exception
 from typing import List, Optional
 from datetime import datetime
 
 
 class EventController:
-    """Contrôleur pour gérer les opérations CRUD sur les événements"""
 
     def __init__(self, db: Session):
+        """Initialise le contrôleur des événements."""
         self.db = db
+
+    def _require(self, current_user: dict, permission: str, message: str):
+        """Valide une permission et lève une erreur si refusée."""
+        if not check_permission(current_user.get('department'), permission):
+            raise PermissionError(message)
+
+    def _get_event(self, event_id: int) -> Optional[Event]:
+        """Récupère un événement par identifiant."""
+        return self.db.query(Event).filter(Event.id == event_id).first()
+
+    def _get_contract(self, contract_id: int) -> Optional[Contract]:
+        """Récupère un contrat par identifiant."""
+        return self.db.query(Contract).filter(Contract.id == contract_id).first()
+
+    def _get_employee(self, employee_id: int) -> Optional[Employee]:
+        """Récupère un employé par identifiant."""
+        return self.db.query(Employee).filter(Employee.id == employee_id).first()
 
     def create_event(
         self,
@@ -28,32 +39,15 @@ class EventController:
         attendees: int,
         notes: str = None
     ) -> Event:
-        """
-        Crée un nouvel événement
-
-        Args:
-            current_user: L'utilisateur authentifié
-            contract_id: ID du contrat
-            event_name: Nom de l'événement
-            event_date_start: Date de début
-            event_date_end: Date de fin
-            location: Lieu
-            attendees: Nombre de participants
-            notes: Notes
-
-        Returns:
-            L'événement créé
-        """
+        """Crée un nouvel événement lié à un contrat signé."""
         try:
-            # Vérifier les permissions
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.CREATE_EVENT):
-                raise PermissionError(
-                    "Permission refusée pour créer un événement")
+            self._require(
+                current_user,
+                Permission.CREATE_EVENT,
+                "Permission refusée pour créer un événement",
+            )
 
-            # Vérifier que le contrat existe et est signé
-            contract = self.db.query(Contract).filter(
-                Contract.id == contract_id).first()
+            contract = self._get_contract(contract_id)
             if not contract:
                 raise ValueError(f"Contrat {contract_id} non trouvé")
 
@@ -62,15 +56,12 @@ class EventController:
                     "Le contrat doit être signé avant de créer "
                     "un événement")
 
-            # Le commercial ne peut créer un événement que pour
-            # ses propres clients
             employee_id = current_user.get('employee_id')
             if contract.commercial_contact_id != employee_id:
                 raise PermissionError(
                     "Vous ne pouvez créer un événement que pour "
                     "vos propres clients")
 
-            # Vérifier qu'il n'y a pas déjà un événement pour ce contrat
             existing = self.db.query(Event).filter(
                 Event.contract_id == contract_id).first()
             if existing:
@@ -78,7 +69,6 @@ class EventController:
                     "Un événement existe déjà pour le contrat "
                     f"{contract.contract_number}")
 
-            # Créer l'événement
             event = Event(
                 contract_id=contract_id,
                 event_name=event_name,
@@ -102,20 +92,10 @@ class EventController:
             raise
 
     def get_all_events(self, current_user: dict) -> List[Event]:
-        """
-        Récupère tous les événements
-
-        Args:
-            current_user: L'utilisateur authentifié
-
-        Returns:
-            Liste des événements
-        """
+        """Liste les événements visibles par l'utilisateur courant."""
         try:
             dept = current_user.get('department')
             if not check_permission(dept, Permission.READ_ALL_EVENTS):
-                # Si c'est un support, ne récupérer que ses propres
-                # événements
                 if check_permission(dept, Permission.READ_OWN_EVENTS):
                     return self.get_my_events(current_user)
                 raise PermissionError(
@@ -130,28 +110,16 @@ class EventController:
     def get_event_by_id(
         self, current_user: dict, event_id: int
     ) -> Optional[Event]:
-        """
-        Récupère un événement par son ID
-
-        Args:
-            current_user: L'utilisateur authentifié
-            event_id: ID de l'événement
-
-        Returns:
-            L'événement ou None
-        """
+        """Récupère un événement par identifiant selon les droits."""
         try:
-            event = self.db.query(Event).filter(
-                Event.id == event_id).first()
+            event = self._get_event(event_id)
             if not event:
                 return None
 
-            # Vérifier les permissions
             dept = current_user.get('department')
             if check_permission(dept, Permission.READ_ALL_EVENTS):
                 return event
 
-            # Si support, vérifier que c'est son événement
             if check_permission(dept, Permission.READ_OWN_EVENTS):
                 employee_id = current_user.get('employee_id')
                 if event.support_contact_id == employee_id:
@@ -166,15 +134,7 @@ class EventController:
             raise
 
     def get_my_events(self, current_user: dict) -> List[Event]:
-        """
-        Récupère les événements d'un membre du support
-
-        Args:
-            current_user: L'utilisateur authentifié
-
-        Returns:
-            Liste des événements
-        """
+        """Liste les événements assignés au support courant."""
         try:
             employee_id = current_user.get('employee_id')
             return self.db.query(Event).filter(
@@ -186,25 +146,14 @@ class EventController:
             raise
 
     def get_events_without_support(self, current_user: dict) -> List[Event]:
-        """
-        Récupère les événements sans contact support assigné
-
-        Args:
-            current_user: L'utilisateur authentifié
-
-        Returns:
-            Liste des événements sans support
-        """
+        """Liste les événements sans support assigné."""
         try:
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.READ_ALL_EVENTS):
-                raise PermissionError("Permission refusée")
-
-            # == None (et non `is None`) est requis par SQLAlchemy
-            # pour générer le SQL
-            return self.db.query(Event).filter(
-                Event.support_contact_id == None  # noqa: E711
-            ).all()
+            self._require(
+                current_user,
+                Permission.READ_ALL_EVENTS,
+                "Permission refusée",
+            )
+            return self.db.query(Event).filter(Event.support_contact_id.is_(None)).all()
 
         except Exception as e:
             log_exception(e, {"action": "get_events_without_support"})
@@ -216,25 +165,15 @@ class EventController:
         event_id: int,
         **kwargs
     ) -> Event:
-        """
-        Met à jour un événement
-
-        Args:
-            current_user: L'utilisateur authentifié
-            event_id: ID de l'événement
-            **kwargs: Champs à mettre à jour
-
-        Returns:
-            L'événement modifié
-        """
+        """Met à jour un événement assigné au support courant."""
         try:
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.UPDATE_OWN_EVENTS):
-                raise PermissionError(
-                    "Permission refusée pour modifier un événement")
+            self._require(
+                current_user,
+                Permission.UPDATE_OWN_EVENTS,
+                "Permission refusée pour modifier un événement",
+            )
 
-            event = self.db.query(Event).filter(
-                Event.id == event_id).first()
+            event = self._get_event(event_id)
             if not event:
                 raise ValueError(f"Événement {event_id} non trouvé")
 
@@ -243,7 +182,6 @@ class EventController:
                 raise PermissionError(
                     "Vous ne pouvez modifier que vos propres événements")
 
-            # Mettre à jour les champs
             if 'event_name' in kwargs:
                 event.event_name = kwargs['event_name']
             if 'event_date_start' in kwargs:
@@ -274,33 +212,19 @@ class EventController:
         event_id: int,
         support_id: int
     ) -> Event:
-        """
-        Assigne un membre du support à un événement
-
-        Args:
-            current_user: L'utilisateur authentifié
-            event_id: ID de l'événement
-            support_id: ID du membre du support
-
-        Returns:
-            L'événement modifié
-        """
+        """Assigne un membre du support à un événement."""
         try:
-            # Vérifier les permissions
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.ASSIGN_SUPPORT):
-                raise PermissionError(
-                    "Permission refusée pour assigner un support")
+            self._require(
+                current_user,
+                Permission.ASSIGN_SUPPORT,
+                "Permission refusée pour assigner un support",
+            )
 
-            # Récupérer l'événement
-            event = self.db.query(Event).filter(
-                Event.id == event_id).first()
+            event = self._get_event(event_id)
             if not event:
                 raise ValueError(f"Événement {event_id} non trouvé")
 
-            # Vérifier que le support existe et est du département support
-            support = self.db.query(Employee).filter(
-                Employee.id == support_id).first()
+            support = self._get_employee(support_id)
             if not support:
                 raise ValueError(f"Employé {support_id} non trouvé")
 
@@ -309,7 +233,6 @@ class EventController:
                     f"L'employé {support.full_name} n'est pas du "
                     "département support")
 
-            # Assigner le support
             event.support_contact_id = support_id
 
             self.db.commit()

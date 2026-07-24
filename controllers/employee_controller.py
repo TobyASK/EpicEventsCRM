@@ -1,21 +1,28 @@
-"""
-Controller pour la gestion des employés
-"""
 from sqlalchemy.orm import Session
-from models.employee import Employee, Department
-from utils.auth import hash_password
-from utils.permissions import Permission, check_permission
-from utils.sentry_logger import (
+from models import Employee, Department
+from utils import (
+    hash_password,
+    Permission,
+    check_permission,
     log_employee_creation, log_employee_update, log_exception,
 )
 from typing import List, Optional
 
 
 class EmployeeController:
-    """Contrôleur pour gérer les opérations CRUD sur les employés"""
 
     def __init__(self, db: Session):
+        """Initialise le contrôleur des employés."""
         self.db = db
+
+    def _require(self, current_user: dict, permission: str, message: str):
+        """Valide une permission et lève une erreur si refusée."""
+        if not check_permission(current_user.get('department'), permission):
+            raise PermissionError(message)
+
+    def _get_employee(self, employee_id: int) -> Optional[Employee]:
+        """Récupère un employé par son identifiant."""
+        return self.db.query(Employee).filter(Employee.id == employee_id).first()
 
     def create_employee(
         self,
@@ -26,39 +33,20 @@ class EmployeeController:
         password: str,
         department: str
     ) -> Employee:
-        """
-        Crée un nouvel employé
-
-        Args:
-            current_user: L'utilisateur authentifié
-            employee_number: Numéro d'employé
-            full_name: Nom complet
-            email: Email
-            password: Mot de passe
-            department: Département
-
-        Returns:
-            L'employé créé
-
-        Raises:
-            PermissionError: Si l'utilisateur n'a pas la permission
-            ValueError: Si les données sont invalides
-        """
+        """Crée un nouvel employé."""
         try:
-            # Vérifier les permissions
-            dept_user = current_user.get('department')
-            if not check_permission(dept_user, Permission.CREATE_EMPLOYEE):
-                raise PermissionError(
-                    "Permission refusée pour créer un employé")
+            self._require(
+                current_user,
+                Permission.CREATE_EMPLOYEE,
+                "Permission refusée pour créer un employé",
+            )
 
-            # Vérifier que l'email n'existe pas déjà
             existing = self.db.query(Employee).filter(
                 Employee.email == email).first()
             if existing:
                 raise ValueError(
                     f"Un employé avec l'email {email} existe déjà")
 
-            # Vérifier que le numéro d'employé n'existe pas
             existing = self.db.query(Employee).filter(
                 Employee.employee_number == employee_number).first()
             if existing:
@@ -66,13 +54,11 @@ class EmployeeController:
                     f"Le numéro d'employé {employee_number} "
                     "existe déjà")
 
-            # Valider le département
             try:
                 dept = Department(department)
             except ValueError:
                 raise ValueError(f"Département invalide: {department}")
 
-            # Créer l'employé
             employee = Employee(
                 employee_number=employee_number,
                 full_name=full_name,
@@ -85,7 +71,6 @@ class EmployeeController:
             self.db.commit()
             self.db.refresh(employee)
 
-            # Journaliser
             log_employee_creation(email, department)
 
             return employee
@@ -96,20 +81,13 @@ class EmployeeController:
             raise
 
     def get_all_employees(self, current_user: dict) -> List[Employee]:
-        """
-        Récupère tous les employés
-
-        Args:
-            current_user: L'utilisateur authentifié
-
-        Returns:
-            Liste des employés
-        """
+        """Liste tous les employés."""
         try:
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.READ_EMPLOYEES):
-                raise PermissionError(
-                    "Permission refusée pour lire les employés")
+            self._require(
+                current_user,
+                Permission.READ_EMPLOYEES,
+                "Permission refusée pour lire les employés",
+            )
 
             return self.db.query(Employee).all()
 
@@ -120,24 +98,14 @@ class EmployeeController:
     def get_employee_by_id(
         self, current_user: dict, employee_id: int
     ) -> Optional[Employee]:
-        """
-        Récupère un employé par son ID
-
-        Args:
-            current_user: L'utilisateur authentifié
-            employee_id: ID de l'employé
-
-        Returns:
-            L'employé ou None
-        """
+        """Récupère un employé par ID avec contrôle d'accès."""
         try:
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.READ_EMPLOYEES):
-                raise PermissionError(
-                    "Permission refusée pour lire les employés")
-
-            return self.db.query(Employee).filter(
-                Employee.id == employee_id).first()
+            self._require(
+                current_user,
+                Permission.READ_EMPLOYEES,
+                "Permission refusée pour lire les employés",
+            )
+            return self._get_employee(employee_id)
 
         except Exception as e:
             log_exception(e, {
@@ -147,15 +115,7 @@ class EmployeeController:
             raise
 
     def get_employee_by_email(self, email: str) -> Optional[Employee]:
-        """
-        Récupère un employé par son email (pour l'authentification)
-
-        Args:
-            email: Email de l'employé
-
-        Returns:
-            L'employé ou None
-        """
+        """Récupère un employé via son email."""
         return self.db.query(Employee).filter(
             Employee.email == email).first()
 
@@ -165,29 +125,18 @@ class EmployeeController:
         employee_id: int,
         **kwargs
     ) -> Employee:
-        """
-        Met à jour un employé
-
-        Args:
-            current_user: L'utilisateur authentifié
-            employee_id: ID de l'employé à modifier
-            **kwargs: Champs à mettre à jour
-
-        Returns:
-            L'employé modifié
-        """
+        """Met à jour un employé existant."""
         try:
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.UPDATE_EMPLOYEE):
-                raise PermissionError(
-                    "Permission refusée pour modifier un employé")
+            self._require(
+                current_user,
+                Permission.UPDATE_EMPLOYEE,
+                "Permission refusée pour modifier un employé",
+            )
 
-            employee = self.db.query(Employee).filter(
-                Employee.id == employee_id).first()
+            employee = self._get_employee(employee_id)
             if not employee:
                 raise ValueError(f"Employé {employee_id} non trouvé")
 
-            # Mettre à jour les champs
             if 'full_name' in kwargs:
                 employee.full_name = kwargs['full_name']
             if 'email' in kwargs:
@@ -200,7 +149,6 @@ class EmployeeController:
             self.db.commit()
             self.db.refresh(employee)
 
-            # Journaliser
             log_employee_update(employee.email, current_user.get('email'))
 
             return employee
@@ -214,30 +162,19 @@ class EmployeeController:
             raise
 
     def delete_employee(self, current_user: dict, employee_id: int) -> None:
-        """
-        Supprime un employé.
-
-        Args:
-            current_user: L'utilisateur authentifié
-            employee_id: ID de l'employé à supprimer
-
-        Raises:
-            PermissionError: Si l'utilisateur n'a pas la permission
-            ValueError: Si l'employé n'existe pas ou tentative
-                d'auto-suppression
-        """
+        """Supprime un employé."""
         try:
-            dept = current_user.get('department')
-            if not check_permission(dept, Permission.DELETE_EMPLOYEE):
-                raise PermissionError(
-                    "Permission refusée pour supprimer un employé")
+            self._require(
+                current_user,
+                Permission.DELETE_EMPLOYEE,
+                "Permission refusée pour supprimer un employé",
+            )
 
             if employee_id == current_user.get('employee_id'):
                 raise ValueError(
                     "Vous ne pouvez pas supprimer votre propre compte")
 
-            employee = self.db.query(Employee).filter(
-                Employee.id == employee_id).first()
+            employee = self._get_employee(employee_id)
             if not employee:
                 raise ValueError(f"Employé {employee_id} non trouvé")
 
@@ -255,21 +192,13 @@ class EmployeeController:
     def get_employees_by_department(
         self, current_user: dict, department: str
     ) -> List[Employee]:
-        """
-        Récupère les employés d'un département
-
-        Args:
-            current_user: L'utilisateur authentifié
-            department: Le département
-
-        Returns:
-            Liste des employés du département
-        """
+        """Liste les employés d'un département."""
         try:
-            dept_user = current_user.get('department')
-            if not check_permission(dept_user, Permission.READ_EMPLOYEES):
-                raise PermissionError(
-                    "Permission refusée pour lire les employés")
+            self._require(
+                current_user,
+                Permission.READ_EMPLOYEES,
+                "Permission refusée pour lire les employés",
+            )
 
             dept = Department(department)
             return self.db.query(Employee).filter(
