@@ -2,6 +2,7 @@
 from datetime import datetime
 
 import click
+import sentry_sdk
 from rich.console import Console
 from rich.prompt import Prompt
 from rich.table import Table
@@ -62,6 +63,16 @@ def logout():
         console.print("[bold green][OK] Déconnexion réussie![/bold green]")
 
     run_with_db(action)
+
+
+@cli.command("sentry-raise")
+def sentry_raise():
+    """Déclenche une exception volontaire pour vérifier Sentry."""
+    try:
+        raise RuntimeError("Erreur de test Sentry volontaire")
+    except RuntimeError as exc:
+        sentry_sdk.capture_exception(exc)
+        raise
 
 
 @cli.group()

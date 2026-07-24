@@ -208,10 +208,11 @@ def _interactive_menu() -> None:
         console.print("4. Actions clients")
         console.print("5. Actions contrats")
         console.print("6. Actions evenements")
+        console.print("7. Test erreur Sentry")
         console.print("0. Quitter")
 
         try:
-            choice = Prompt.ask("Choix", choices=["0", "1", "2", "3", "4", "5", "6"], default="0")
+            choice = Prompt.ask("Choix", choices=["0", "1", "2", "3", "4", "5", "6", "7"], default="0")
         except KeyboardInterrupt:
             console.print("\n[green]Au revoir.[/green]")
             return
@@ -238,6 +239,8 @@ def _interactive_menu() -> None:
         elif choice == "6":
             if _ensure_authenticated():
                 _event_menu()
+        elif choice == "7":
+            _run_cli(["sentry-raise"])
 
 
 if __name__ == "__main__":
