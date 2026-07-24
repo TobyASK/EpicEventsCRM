@@ -1,6 +1,6 @@
 import jwt
 import argon2
-from datetime import datetime, timedelta
+from datetime import datetime
 from typing import Optional
 from config import (
     JWT_SECRET_KEY, JWT_ALGORITHM, AUTH_TOKEN_FILE,
@@ -50,7 +50,6 @@ def decode_jwt_token(token: str) -> Optional[dict]:
             token,
             JWT_SECRET_KEY,
             algorithms=[JWT_ALGORITHM],
-            options={"verify_exp": False},
         )
         return payload
     except jwt.InvalidTokenError:
